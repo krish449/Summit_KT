@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Path \"c:\\\\Projects\\\\Summit\\\\Summit KT App\\\\app\\\\api\\\\documents\\\\view\" -Force)",
+      "Bash(Out-Null)",
+      "Bash(npm run *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\KRISHN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Projects-Summit-Summit-KT-App\\\\eb207b95-989e-4dfc-aa03-0c37ed5b225d\\\\tasks\\\\b59tv711e.output\")",
+      "Bash(Select-Object -Last 20)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(Get-Process -Name \"node\" -ErrorAction SilentlyContinue)",
+      "Bash(Stop-Process -Force)",
+      "Bash(Write-Host \"Stopped\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"next-server\")"
+    ]
+  }
+}
