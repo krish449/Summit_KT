@@ -134,7 +134,6 @@ export async function POST(request: Request) {
         try {
           completion = await createGroqChatCompletion(
             {
-              model: 'llama-3.3-70b-versatile',
               stream: true,
               max_tokens: 1024,
               messages: [

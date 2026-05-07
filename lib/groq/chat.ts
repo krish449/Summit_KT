@@ -39,7 +39,7 @@ export function buildKtPrompt(projectName: string, context: string) {
 }
 
 export async function createGroqChatCompletion(
-  args: Parameters<Groq['chat']['completions']['create']>[0],
+  args: Omit<Parameters<Groq['chat']['completions']['create']>[0], 'model'>,
   onStatus?: (message: string) => void,
 ) {
   const client = getGroqClient();

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { ChatCompletion } from 'groq-sdk/resources/chat/completions';
 
 import { getCurrentUserContext } from '@/lib/auth';
 import { getProfileById } from '@/lib/data';
@@ -216,7 +217,7 @@ export async function POST(request: Request) {
           response_format: { type: 'json_object' },
           temperature: 0.8,
           max_tokens: 3500,
-        });
+        }) as ChatCompletion;
 
         const raw = completion?.choices?.[0]?.message?.content ?? '{}';
         questions = parseQuestions(raw);
