@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 
 import { getCurrentUserContext } from '@/lib/auth';
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
       projectId: string;
       attemptId: string;
       answers: Record<string, QuizOptionKey>;
+      disqualified?: boolean;
+      disqualifyReason?: string;
     };
 
     const { data: attempt } = await supabase
@@ -53,26 +56,45 @@ export async function POST(request: Request) {
 
     const project = await getProjectById(body.projectId);
     const scored = scoreQuizSubmission(assignedQuestions, body.answers, project?.pass_threshold ?? 60);
+    const isDisqualified = body.disqualified === true;
 
     await supabase
       .from('quiz_attempts')
       .update({
         answers_given: body.answers,
-        score: scored.score,
+        score: isDisqualified ? 0 : scored.score,
         total_marks: scored.totalMarks,
-        percentage: scored.percentage,
-        passed: scored.passed,
+        percentage: isDisqualified ? 0 : scored.percentage,
+        passed: isDisqualified ? false : scored.passed,
         submitted_at: new Date().toISOString(),
         status: 'submitted',
       })
       .eq('id', body.attemptId);
 
-    await logActivity({ userId: user.id, projectId: body.projectId, action: 'quiz_submitted', metadata: { score: scored.score, percentage: scored.percentage } });
+    await logActivity({
+      userId: user.id,
+      projectId: body.projectId,
+      action: 'quiz_submitted',
+      metadata: {
+        score: isDisqualified ? 0 : scored.score,
+        percentage: isDisqualified ? 0 : scored.percentage,
+        disqualified: isDisqualified,
+        disqualifyReason: body.disqualifyReason ?? null,
+      },
+    });
+
+    revalidatePath(`/projects/${body.projectId}/quiz`);
+    revalidatePath(`/projects/${body.projectId}`);
+    revalidatePath('/dashboard');
+    revalidatePath('/projects');
+    revalidatePath(`/admin/projects/${body.projectId}/analytics`);
 
     return NextResponse.json({
-      score: scored.score,
+      score: isDisqualified ? 0 : scored.score,
       totalMarks: scored.totalMarks,
-      percentage: scored.percentage,
+      percentage: isDisqualified ? 0 : scored.percentage,
+      disqualified: isDisqualified,
+      disqualifyReason: body.disqualifyReason ?? null,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Quiz submission failed' }, { status: 500 });

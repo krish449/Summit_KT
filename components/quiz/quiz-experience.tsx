@@ -21,6 +21,8 @@ interface QuizResult {
   score: number;
   totalMarks: number;
   percentage: number;
+  disqualified?: boolean;
+  disqualifyReason?: string | null;
 }
 
 type Phase = 'start' | 'in_section' | 'section_done' | 'submitting' | 'submitted';
@@ -62,6 +64,7 @@ export function QuizExperience({ projectId, projectName, lockedAttempt }: QuizEx
   const attemptIdRef = useRef<string | null>(null);
   const sectionsRef = useRef<QuizSection[]>([]);
   const currentSectionIdxRef = useRef(0);
+  const tabSwitchCountRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { answersRef.current = answers; }, [answers]);
@@ -79,13 +82,15 @@ export function QuizExperience({ projectId, projectName, lockedAttempt }: QuizEx
   const submitQuiz = useCallback(async (
     finalAnswers: Record<string, 'A' | 'B' | 'C' | 'D'>,
     id: string,
+    disqualified = false,
+    disqualifyReason = '',
   ) => {
     setPhase('submitting');
     try {
       const res = await fetch('/api/quiz/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, attemptId: id, answers: finalAnswers }),
+        body: JSON.stringify({ projectId, attemptId: id, answers: finalAnswers, disqualified, disqualifyReason }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -139,13 +144,27 @@ export function QuizExperience({ projectId, projectName, lockedAttempt }: QuizEx
   useEffect(() => {
     const onVisibility = () => {
       if (document.hidden && phaseRef.current === 'in_section') {
-        setTabSwitchCount((c) => c + 1);
-        setShowTabWarning(true);
+        tabSwitchCountRef.current += 1;
+        setTabSwitchCount(tabSwitchCountRef.current);
+
+        if (tabSwitchCountRef.current >= 2) {
+          // Second violation — auto-fail immediately
+          if (timerRef.current) clearInterval(timerRef.current);
+          submitQuiz(
+            answersRef.current,
+            attemptIdRef.current ?? '',
+            true,
+            'Switched tabs more than once during the assessment.',
+          );
+        } else {
+          // First violation — warn and allow resume
+          setShowTabWarning(true);
+        }
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, []);
+  }, [submitQuiz]);
 
   // ── Fullscreen-exit detection ───────────────────────────────────────────
   useEffect(() => {
@@ -218,7 +237,15 @@ export function QuizExperience({ projectId, projectName, lockedAttempt }: QuizEx
   if (result || phase === 'submitted') {
     return (
       <div className="space-y-6">
-        {result && <ResultSummary {...result} />}
+        {result && (
+          <ResultSummary
+            score={result.score}
+            totalMarks={result.totalMarks}
+            percentage={result.percentage}
+            disqualified={result.disqualified}
+            disqualifyReason={result.disqualifyReason}
+          />
+        )}
         <Link href="/dashboard"><Button>Back to Dashboard</Button></Link>
       </div>
     );
