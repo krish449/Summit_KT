@@ -21,6 +21,17 @@ export interface ProjectRecord {
   created_at: string;
   is_active: boolean;
   pass_threshold?: number | null;
+  quiz_open_at?: string | null;
+  quiz_close_at?: string | null;
+}
+
+export interface QuizResetRecord {
+  id: string;
+  user_id: string;
+  project_id: string;
+  reset_by: string | null;
+  reason: string;
+  reset_at: string;
 }
 
 export interface DocumentRecord {

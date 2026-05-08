@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentUserContext } from '@/lib/auth';
 import { getProfileById, getProjectById, logActivity } from '@/lib/data';
+import { sendQuizSubmissionEmail } from '@/lib/email';
 import { scoreQuizSubmission } from '@/lib/quiz/scoring';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/server';
 import type { AssignedQuestion, QuizOptionKey } from '@/lib/types/database';
@@ -82,6 +83,29 @@ export async function POST(request: Request) {
         disqualifyReason: body.disqualifyReason ?? null,
       },
     });
+
+    // Email the project admin (non-blocking, fire-and-forget)
+    if (project?.created_by) {
+      const { data: adminUser } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', project.created_by)
+        .maybeSingle();
+
+      if (adminUser?.email) {
+        sendQuizSubmissionEmail({
+          adminEmail: adminUser.email,
+          memberName: profile.full_name ?? profile.email,
+          memberEmail: profile.email,
+          projectName: project.name,
+          score: isDisqualified ? 0 : scored.score,
+          totalMarks: scored.totalMarks,
+          percentage: isDisqualified ? 0 : scored.percentage,
+          disqualified: isDisqualified,
+          disqualifyReason: body.disqualifyReason ?? null,
+        });
+      }
+    }
 
     revalidatePath(`/projects/${body.projectId}/quiz`);
     revalidatePath(`/projects/${body.projectId}`);

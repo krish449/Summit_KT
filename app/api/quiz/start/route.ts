@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getCurrentUserContext } from '@/lib/auth';
 import { getProfileById, getProjectById, getProjectMembers, logActivity, userHasProjectAccess } from '@/lib/data';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { createSectionedQuestions } from '@/lib/quiz/assignment';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/server';
 import type { AssignedQuestion, QuizQuestionRecord, QuizSetRecord } from '@/lib/types/database';
@@ -36,6 +37,12 @@ export async function POST(request: Request) {
     const canAccess = await userHasProjectAccess(user.id, profile.role, projectId);
     if (!canAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Rate limit: max 5 quiz starts per hour
+    const rateCheck = await checkRateLimit(user.id, 'quiz_started', 5, 3600);
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ error: 'Too many quiz attempts. Please wait before trying again.' }, { status: 429 });
     }
 
     // Already submitted — return the locked attempt
@@ -78,6 +85,27 @@ export async function POST(request: Request) {
 
       // Old format or empty — delete and start fresh
       await supabase.from('quiz_attempts').delete().eq('id', inProgressAttempt.id);
+    }
+
+    // Check quiz window
+    const { data: projectWindow } = await supabase
+      .from('projects')
+      .select('quiz_open_at, quiz_close_at')
+      .eq('id', projectId)
+      .maybeSingle();
+
+    const now = new Date();
+    if (projectWindow?.quiz_open_at && new Date(projectWindow.quiz_open_at) > now) {
+      return NextResponse.json(
+        { error: 'Quiz has not opened yet.', opensAt: projectWindow.quiz_open_at },
+        { status: 403 },
+      );
+    }
+    if (projectWindow?.quiz_close_at && new Date(projectWindow.quiz_close_at) < now) {
+      return NextResponse.json(
+        { error: 'The quiz window has closed.', closedAt: projectWindow.quiz_close_at },
+        { status: 403 },
+      );
     }
 
     // Load all active sets for this project

@@ -299,12 +299,18 @@ export async function getProjectAnalytics(projectId: string) {
     (memberRows ?? []).map((m: { user_id: string; assigned_at: string }) => [m.user_id, m.assigned_at]),
   );
 
-  const [{ data: sessions }, { data: attempts }, { data: users }, { data: quizSets }] = await Promise.all([
+  const [{ data: sessions }, { data: attempts }, { data: users }, { data: quizSets }, { data: resets }] = await Promise.all([
     supabase.from('chat_sessions').select('*').eq('project_id', projectId),
     supabase.from('quiz_attempts').select('*').eq('project_id', projectId).eq('status', 'submitted'),
     supabase.from('users').select('*'),
     supabase.from('quiz_sets').select('id,set_name').eq('project_id', projectId),
+    supabase.from('quiz_resets').select('user_id').eq('project_id', projectId),
   ]);
+
+  const resetCounts = new Map<string, number>();
+  ((resets ?? []) as Array<{ user_id: string }>).forEach((r) => {
+    resetCounts.set(r.user_id, (resetCounts.get(r.user_id) ?? 0) + 1);
+  });
 
   const userIndex = new Map(((users ?? []) as UserProfile[]).map((user) => [user.id, user]));
   const setIndex = new Map(((quizSets ?? []) as { id: string; set_name: string }[]).map((s) => [s.id, s.set_name]));
@@ -343,6 +349,7 @@ export async function getProjectAnalytics(projectId: string) {
       percentage: `${attempt.percentage ?? 0}%`,
       setTaken: sectionLabel,
       submittedAt: formatDate(attempt.submitted_at, true),
+      resetCount: resetCounts.get(attempt.user_id) ?? 0,
     };
   });
 

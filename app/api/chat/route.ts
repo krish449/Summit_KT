@@ -4,6 +4,7 @@ import { getCurrentUserContext } from '@/lib/auth';
 import { getProjectById, getProfileById, logActivity, userHasProjectAccess } from '@/lib/data';
 import { buildKtPrompt, createGroqChatCompletion } from '@/lib/groq/chat';
 import { streamGroqText } from '@/lib/groq/streaming';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { retrieveRelevantChunks } from '@/lib/rag/retrieval';
 import { createServiceRoleSupabaseClient } from '@/lib/supabase/server';
 
@@ -61,6 +62,13 @@ export async function POST(request: Request) {
     }
 
     const profile = await getProfileById(user.id);
+
+    // Rate limit: 30 chat messages per hour per user
+    const rateCheck = await checkRateLimit(user.id, 'chatbot_message', 30, 3600);
+    if (!rateCheck.allowed) {
+      return NextResponse.json({ error: 'Message limit reached. Please try again later.' }, { status: 429 });
+    }
+
     const canAccess = await userHasProjectAccess(user.id, profile?.role, body.projectId);
 
     if (!canAccess) {

@@ -104,13 +104,54 @@ export async function removeProjectMemberAction(formData: FormData) {
   revalidatePath(`/admin/projects/${projectId}/members`);
 }
 
+const MAX_QUIZ_RESETS = 2;
+
 export async function resetQuizAttemptAction(formData: FormData) {
   const supabase = getAdminSupabase();
   const attemptId = String(formData.get('attempt_id') ?? '');
   const projectId = String(formData.get('project_id') ?? '');
+  const userId = String(formData.get('user_id') ?? '');
+  const reason = String(formData.get('reason') ?? '').trim() || 'Reset by admin';
+  const resetBy = String(formData.get('reset_by') ?? '');
+
+  // Enforce max reset limit
+  const { count } = await supabase
+    .from('quiz_resets')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('project_id', projectId);
+
+  if ((count ?? 0) >= MAX_QUIZ_RESETS) {
+    return;
+  }
 
   await supabase.from('quiz_attempts').delete().eq('id', attemptId);
+  await supabase.from('quiz_resets').insert({
+    user_id: userId,
+    project_id: projectId,
+    reset_by: resetBy || null,
+    reason,
+  });
+
   revalidatePath(`/admin/projects/${projectId}/analytics`);
+}
+
+export async function setQuizWindowAction(formData: FormData) {
+  const supabase = getAdminSupabase();
+  const projectId = String(formData.get('project_id') ?? '');
+  const openAtRaw = (formData.get('quiz_open_at') as string | null) || '';
+  const closeAtRaw = (formData.get('quiz_close_at') as string | null) || '';
+
+  await supabase
+    .from('projects')
+    .update({
+      quiz_open_at: openAtRaw ? new Date(openAtRaw).toISOString() : null,
+      quiz_close_at: closeAtRaw ? new Date(closeAtRaw).toISOString() : null,
+    })
+    .eq('id', projectId);
+
+  revalidatePath(`/admin/projects/${projectId}/analytics`);
+  revalidatePath(`/projects/${projectId}/quiz`);
 }
 
 export async function deleteQuizSetAction(formData: FormData) {

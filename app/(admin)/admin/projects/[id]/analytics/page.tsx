@@ -1,13 +1,16 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 
-import { resetQuizAttemptAction } from '@/app/actions/admin';
+import { resetQuizAttemptAction, setQuizWindowAction } from '@/app/actions/admin';
 import { AnalyticsTable } from '@/components/admin/analytics-table';
 import { QuizResultsCard } from '@/components/admin/quiz-results-card';
+import { QuizWindowForm } from '@/components/admin/quiz-window-form';
+import { requireAdmin } from '@/lib/auth';
 import { getProjectAnalytics, getProjectById } from '@/lib/data';
 
 export default async function ProjectAnalyticsPage({ params }: { params: { id: string } }) {
-  const [project, analytics] = await Promise.all([
+  const [{ profile }, project, analytics] = await Promise.all([
+    requireAdmin(),
     getProjectById(params.id),
     getProjectAnalytics(params.id),
   ]);
@@ -21,7 +24,18 @@ export default async function ProjectAnalyticsPage({ params }: { params: { id: s
         <ChevronRight className="h-3.5 w-3.5" />
         <span className="font-medium text-slate-900">Analytics</span>
       </nav>
-      <QuizResultsCard projectId={params.id} rows={analytics.quizResults} resetAction={resetQuizAttemptAction} />
+      <QuizWindowForm
+        projectId={params.id}
+        currentOpenAt={project?.quiz_open_at}
+        currentCloseAt={project?.quiz_close_at}
+        setWindowAction={setQuizWindowAction}
+      />
+      <QuizResultsCard
+        projectId={params.id}
+        adminId={profile?.id}
+        rows={analytics.quizResults}
+        resetAction={resetQuizAttemptAction}
+      />
       <AnalyticsTable rows={analytics.chatbotUsage} title="Chatbot usage" />
       <AnalyticsTable rows={analytics.loginActivity} title="Login activity" />
     </div>
